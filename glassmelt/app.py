@@ -12,6 +12,7 @@ import os
 import threading
 from dataclasses import dataclass
 
+from .audit.flood import FloodGovernor
 from .audit.log import AuditLog
 from .audit.record import AuditRecord
 from .batch.charge import Charger
@@ -134,6 +135,7 @@ class Platform:
         self.audit = AuditLog(
             self.clock, self.bus, JsonlJournal(store.root, "audit", segment_limit=512)
         )
+        self.flood = FloodGovernor(self.clock, self.audit)
         self.namespaces = NamespaceRegistry(unit)
         self.topology: Topology = build_default_topology()
         self.trend = TrendBuffer(period_s=5.0)
@@ -702,6 +704,7 @@ class Platform:
             ),
             "namespaces_by_area": self.namespaces_by_area(),
             "audit": self.audit.summary(),
+            "flood": self.flood.summary(),
             "endpoints": self.endpoints(),
         }
 

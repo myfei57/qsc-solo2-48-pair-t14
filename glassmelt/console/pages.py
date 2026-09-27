@@ -35,13 +35,36 @@ pre { font-size: 12px; background: #0d0a08; padding: 10px; border-radius: 6px; o
 """
 
 _SCRIPT = """
+function renderGoverned(governed) {
+  if (!governed || !governed.totals) { return '治理视图加载中'; }
+  const totals = governed.totals;
+  const lines = [
+    '波次 ' + totals.waves + '（进行中 ' + totals.active_waves + '）· 压掉重复 ' +
+      totals.suppressed + ' 条 · 安全未恢复 ' + totals.safety_open + ' 条'
+  ];
+  for (const wave of governed.waves.slice(-6)) {
+    const tag = wave.state === 'active'
+      ? '进行中'
+      : (wave.converged_by === 'recovery' ? '已收敛·恢复' : '已收敛·静默');
+    lines.push('#' + wave.wave_id + ' [' + tag + '] 首出 ' + wave.first_out.component +
+      '/' + wave.first_out.action + ' · 原始 ' + wave.records + ' 条 · 压 ' + wave.suppressed + ' 条');
+    for (const item of wave.safety) {
+      lines.push('  [安全] ' + item.action + (item.recovered ? ' 已恢复' : ' 未恢复'));
+    }
+    for (const item of wave.members) {
+      lines.push('  ' + item.action + ' ×' + item.occurrences + (item.recovered ? ' 已恢复' : ''));
+    }
+  }
+  return lines.join('\\n');
+}
 async function refresh() {
   const state = await (await fetch('/api/state')).json();
   const alarms = await (await fetch('/api/alarms')).json();
   const trend = await (await fetch('/api/trend?window_s=600')).json();
   document.getElementById('out-state').textContent = JSON.stringify(state, null, 2);
   document.getElementById('out-alarms').textContent =
-    alarms.count + ' 条告警\\n' + JSON.stringify(alarms.alarms.slice(-8), null, 2);
+    renderGoverned(alarms.governed) + '\\n---- 原始记录 ' + alarms.count + ' 条 ----\\n' +
+    JSON.stringify(alarms.alarms.slice(-8), null, 2);
   document.getElementById('out-trend').textContent = JSON.stringify(trend.series, null, 2);
 }
 async function act(path, payload) {
@@ -60,7 +83,7 @@ window.addEventListener('DOMContentLoaded', () => {
 _FOCUS = {
     "overview": "液面、窑温、助燃风与炉压的实时状态灯，以及退火告警列表",
     "operations": "投料、点火、开闸板、吹气与退火复位的操作按钮",
-    "records": "审计条目、告警历史与落盘日志",
+    "records": "审计条目、告警治理（归波、首出与收敛）与落盘日志",
 }
 
 

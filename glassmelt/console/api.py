@@ -52,8 +52,14 @@ class ConsoleAPI:
         return {"window_s": window, "start": round(start, 3), "end": round(end, 3), "series": result}
 
     def alarms(self) -> dict:
+        """告警面板：原始记录一条不少，另附洪泛治理视图。"""
+
         alarms = self.platform.audit.alarms()
-        return {"count": len(alarms), "alarms": alarms}
+        return {
+            "count": len(alarms),
+            "alarms": alarms,
+            "governed": self.platform.flood.view(),
+        }
 
     def audit(self, limit: int = 100) -> dict:
         bounded = max(1, min(MAX_AUDIT_LIMIT, int(limit)))
