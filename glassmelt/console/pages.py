@@ -35,13 +35,43 @@ pre { font-size: 12px; background: #0d0a08; padding: 10px; border-radius: 6px; o
 """
 
 _SCRIPT = """
+function renderAlarms(alarms) {
+  if (alarms.view !== 'governed') {
+    document.getElementById('out-alarms').textContent =
+      alarms.count + ' 条原始告警\\n' + JSON.stringify(alarms.alarms.slice(-8), null, 2);
+    return;
+  }
+  const lines = [];
+  lines.push('活动波 ' + alarms.active_wave_count +
+    '｜已收敛 ' + alarms.converged_wave_count +
+    '｜未恢复安全级 ' + alarms.open_safety_count +
+    '｜压掉重复 ' + alarms.suppressed_count + ' 条');
+  for (const wave of alarms.waves) {
+    const fo = wave.first_out;
+    const tag = wave.status === 'open' ? '●活动' : '○收敛';
+    const safe = wave.has_safety ? ' ⚠安全级' : '';
+    lines.push('');
+    lines.push('[' + tag + '] ' + wave.wave_id + safe +
+      ' 首出 ' + fo.subject + '/' + fo.action +
+      ' @' + new Date(fo.first_ts * 1000).toLocaleTimeString() +
+      '（点位 ' + wave.point_count + ' / 上报 ' + wave.total_count +
+      ' / 未恢复 ' + wave.open_point_count + '）');
+    for (const row of wave.rows || []) {
+      const mark = row.first_out ? '首出' : '    ';
+      const repeat = row.suppressed_count > 0 ? ' ×' + row.count + '（压' + row.suppressed_count + '）' : '';
+      const state = row.open ? '未恢复' : '已恢复';
+      lines.push('  ' + mark + ' ' + row.severity + ' ' + row.subject +
+        '/' + row.action + ' ' + state + repeat);
+    }
+  }
+  document.getElementById('out-alarms').textContent = lines.join('\\n');
+}
 async function refresh() {
   const state = await (await fetch('/api/state')).json();
   const alarms = await (await fetch('/api/alarms')).json();
   const trend = await (await fetch('/api/trend?window_s=600')).json();
   document.getElementById('out-state').textContent = JSON.stringify(state, null, 2);
-  document.getElementById('out-alarms').textContent =
-    alarms.count + ' 条告警\\n' + JSON.stringify(alarms.alarms.slice(-8), null, 2);
+  renderAlarms(alarms);
   document.getElementById('out-trend').textContent = JSON.stringify(trend.series, null, 2);
 }
 async function act(path, payload) {

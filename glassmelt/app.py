@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from .audit.log import AuditLog
 from .audit.record import AuditRecord
+from .alarm.governor import AlarmGovernor
 from .batch.charge import Charger
 from .batch.scale import BatchScale
 from .burner.air import CombustionAir
@@ -133,6 +134,18 @@ class Platform:
         self.store = store
         self.audit = AuditLog(
             self.clock, self.bus, JsonlJournal(store.root, "audit", segment_limit=512)
+        )
+        governance = self.config.alarm_governance
+        self.alarm_board = AlarmGovernor(
+            self.clock,
+            self.bus,
+            window_s=governance.window_s,
+            max_window_s=governance.max_window_s,
+            linger_s=governance.linger_s,
+            safety_linger_s=governance.safety_linger_s,
+            settle_s=governance.settle_s,
+            reopen_gap_s=governance.reopen_gap_s,
+            wave_limit=governance.wave_limit,
         )
         self.namespaces = NamespaceRegistry(unit)
         self.topology: Topology = build_default_topology()
@@ -352,6 +365,8 @@ class Platform:
             self.trend.append("belt_speed", moment, anneal["belt"]["speed_m_per_min"])
             self.trend.append("heater_power_pct", moment, anneal["heater"]["power_pct"])
 
+            governance = self.alarm_board.sweep()
+
             return {
                 "cycle": self._cycles,
                 "dt": state.dt,
@@ -369,6 +384,7 @@ class Platform:
                 "cut": cut.as_dict(),
                 "forming": run.as_dict(),
                 "anneal": anneal,
+                "alarm_governance": governance,
                 "zones": self.zones.snapshot(),
             }
 
@@ -626,6 +642,7 @@ class Platform:
                 "/api/state",
                 "/api/trend",
                 "/api/alarms",
+                "/api/alarms/ack",
                 "/api/audit",
                 "/api/journal",
                 "/api/readiness",
@@ -701,6 +718,7 @@ class Platform:
                 {entry["area"] for entry in self.namespaces.describe()}
             ),
             "namespaces_by_area": self.namespaces_by_area(),
+            "alarm_governance": self.alarm_board.snapshot(),
             "audit": self.audit.summary(),
             "endpoints": self.endpoints(),
         }
@@ -728,6 +746,7 @@ def build_platform(
             mold=effective.mold,
             lehr=effective.lehr,
             batch=effective.batch,
+            alarm_governance=effective.alarm_governance,
             pages=effective.pages,
         )
     return Platform(config=effective, clock=clock, unit=unit)

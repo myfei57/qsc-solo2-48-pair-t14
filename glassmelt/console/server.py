@@ -73,7 +73,11 @@ class ConsoleRequestHandler(BaseHTTPRequestHandler):
                 window = float((query.get("window_s") or ["600"])[0])
                 self._send_json(self.api.trend(series=series, window_s=window))
             elif parsed.path == "/api/alarms":
-                self._send_json(self.api.alarms())
+                view = (query.get("view") or ["governed"])[0]
+                include_converged = (query.get("converged") or ["1"])[0] not in ("0", "false")
+                self._send_json(
+                    self.api.alarms(view=view, include_converged=include_converged)
+                )
             elif parsed.path == "/api/audit":
                 limit = int((query.get("limit") or ["100"])[0])
                 self._send_json(self.api.audit(limit=limit))
@@ -117,6 +121,8 @@ class ConsoleRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(self.api.release_ignition_latch(payload))
             elif parsed.path == "/api/scale/calibrate":
                 self._send_json(self.api.calibrate(payload))
+            elif parsed.path == "/api/alarms/ack":
+                self._send_json(self.api.acknowledge_wave(payload))
             elif parsed.path == "/api/cycle":
                 self._send_json(self.api.keep_alive(payload))
             elif parsed.path == "/api/start":

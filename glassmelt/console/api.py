@@ -51,9 +51,20 @@ class ConsoleAPI:
             }
         return {"window_s": window, "start": round(start, 3), "end": round(end, 3), "series": result}
 
-    def alarms(self) -> dict:
-        alarms = self.platform.audit.alarms()
-        return {"count": len(alarms), "alarms": alarms}
+    def alarms(self, view: str = "governed", include_converged: bool = True) -> dict:
+        """报警视图：governed 走波次治理，raw 返回逐条原始记录。"""
+
+        if view == "raw":
+            alarms = self.platform.audit.alarms()
+            return {"view": "raw", "count": len(alarms), "alarms": alarms}
+        board = self.platform.alarm_board.view(include_converged=include_converged)
+        # count 兼容旧调用方：治理视图下等于面板实际展示行数。
+        return {"view": "governed", "count": board["visible_row_count"], **board}
+
+    def acknowledge_wave(self, payload: dict) -> dict:
+        wave_id = str(payload.get("wave_id", ""))
+        reason = str(payload.get("reason", "控制台确认"))
+        return {"ok": self.platform.alarm_board.acknowledge_wave(wave_id, reason)}
 
     def audit(self, limit: int = 100) -> dict:
         bounded = max(1, min(MAX_AUDIT_LIMIT, int(limit)))

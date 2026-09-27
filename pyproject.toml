@@ -16,6 +16,7 @@ packages = [
     "glassmelt.ns",
     "glassmelt.store",
     "glassmelt.audit",
+    "glassmelt.alarm",
     "glassmelt.batch",
     "glassmelt.furnace",
     "glassmelt.burner",

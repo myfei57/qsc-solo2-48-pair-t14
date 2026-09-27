@@ -47,6 +47,14 @@ limits:
     scale_offset_max_kg: 12.0
     mix_tolerance_pct: 1.5
     charge_window_s: 180.0
+alarm_governance:
+  window_s: 15.0          # 同一波扰动的归并时间窗
+  max_window_s: 300.0     # 单波最长存活，超过后不再承接新事件
+  linger_s: 30.0          # 普通报警无恢复事件时静默多久算自愈
+  safety_linger_s: 300.0  # 安全级静默判定（更保守，且不能短于 linger）
+  settle_s: 5.0           # 全部恢复后的收敛宽限，压住临界点抖动
+  reopen_gap_s: 60.0      # 收敛后同点位再报仍算同一波的间隔
+  wave_limit: 200
 pages:
   - overview
   - operations

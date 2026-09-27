@@ -327,6 +327,67 @@ class BatchLimits:
 
 
 @dataclass(frozen=True)
+class AlarmGovernance:
+    """报警波次治理参数。
+
+    归并时间窗决定一波扰动最多回看多久；普通点位静默 linger 秒视作自愈，
+    安全点位用更长的安全 linger；全部恢复后还要过 settle 宽限才收敛，防止
+    在临界点抖动时反复开合。
+    """
+
+    window_s: float
+    max_window_s: float
+    linger_s: float
+    safety_linger_s: float
+    settle_s: float
+    reopen_gap_s: float
+    wave_limit: int
+
+    @classmethod
+    def from_mapping(cls, section: Mapping[str, Any] | None) -> "AlarmGovernance":
+        values = {
+            "window_s": 15.0,
+            "max_window_s": 300.0,
+            "linger_s": 30.0,
+            "safety_linger_s": 300.0,
+            "settle_s": 5.0,
+            "reopen_gap_s": 60.0,
+            "wave_limit": 200.0,
+        }
+        if section is not None:
+            if not isinstance(section, Mapping):
+                raise ConfigError("配置段落 'alarm_governance' 必须是映射", component="config")
+            for key in values:
+                if key in section:
+                    values[key] = section[key]
+        limits = cls(
+            window_s=float(_checked(values["window_s"], "window_s")),
+            max_window_s=float(_checked(values["max_window_s"], "max_window_s")),
+            linger_s=float(_checked(values["linger_s"], "linger_s", minimum=0.0)),
+            safety_linger_s=float(
+                _checked(values["safety_linger_s"], "safety_linger_s", minimum=0.0)
+            ),
+            settle_s=float(_checked(values["settle_s"], "settle_s", minimum=0.0)),
+            reopen_gap_s=float(_checked(values["reopen_gap_s"], "reopen_gap_s", minimum=0.0)),
+            wave_limit=int(_checked(values["wave_limit"], "wave_limit", minimum=1.0)),
+        )
+        if limits.max_window_s < limits.window_s:
+            raise ConfigError("报警归并最大窗口不得小于归并时间窗", component="config")
+        if limits.safety_linger_s < limits.linger_s:
+            raise ConfigError("安全报警静默判定时间不得短于普通报警", component="config")
+        return limits
+
+
+def _checked(value: Any, key: str, *, minimum: float | None = None) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(f"配置字段 {key!r} 必须是数值", component="config")
+    number = float(value)
+    if minimum is not None and number < minimum:
+        raise ConfigError(f"配置字段 {key!r} 不得小于 {minimum}", component="config")
+    return number
+
+
+@dataclass(frozen=True)
 class PlatformConfig:
     """一份完整的平台配置。"""
 
@@ -341,6 +402,7 @@ class PlatformConfig:
     mold: MoldLimits
     lehr: LehrLimits
     batch: BatchLimits
+    alarm_governance: AlarmGovernance = field(default_factory=lambda: AlarmGovernance.from_mapping(None))
     pages: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -376,6 +438,7 @@ class PlatformConfig:
             mold=MoldLimits.from_mapping(_section(limits, "mold")),
             lehr=LehrLimits.from_mapping(_section(limits, "lehr")),
             batch=BatchLimits.from_mapping(_section(limits, "batch")),
+            alarm_governance=AlarmGovernance.from_mapping(mapping.get("alarm_governance")),
             pages=tuple(pages),
         )
 
@@ -451,6 +514,7 @@ def default_config() -> PlatformConfig:
             mix_tolerance_pct=1.5,
             charge_window_s=180.0,
         ),
+        alarm_governance=AlarmGovernance.from_mapping(None),
         pages=("overview", "operations", "records"),
     )
 
@@ -517,6 +581,15 @@ def config_to_mapping(cfg: PlatformConfig) -> dict:
                 "mix_tolerance_pct": cfg.batch.mix_tolerance_pct,
                 "charge_window_s": cfg.batch.charge_window_s,
             },
+        },
+        "alarm_governance": {
+            "window_s": cfg.alarm_governance.window_s,
+            "max_window_s": cfg.alarm_governance.max_window_s,
+            "linger_s": cfg.alarm_governance.linger_s,
+            "safety_linger_s": cfg.alarm_governance.safety_linger_s,
+            "settle_s": cfg.alarm_governance.settle_s,
+            "reopen_gap_s": cfg.alarm_governance.reopen_gap_s,
+            "wave_limit": cfg.alarm_governance.wave_limit,
         },
         "pages": list(cfg.pages),
     }
